@@ -72,7 +72,7 @@ export function FoodSearch({
     }
 
     try {
-      const res = await fetch(`${API_BASE}/api/food/SearchFoodUSDA`, {
+      const res = await fetch(`${API_BASE}/food/SearchFoodUSDA`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
