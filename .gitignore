@@ -1,0 +1,26 @@
+# frontend
+mealprep-web/node_modules/
+mealprep-web/dist/
+mealprep-web/.vite/
+mealprep-web/.env
+mealprep-web/.DS_Store
+
+# backend
+mealprep-api/bin/
+mealprep-api/obj/
+mealprep-api/.vs/
+mealprep-api/*.user
+mealprep-api/*.suo
+mealprep-api/.vscode/
+mealprep-api/.env
+mealprep-api/Properties/launchSettings.json
+
+# sqlite db
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# scripts
+*push-db.sh
+*pull-db.sh
