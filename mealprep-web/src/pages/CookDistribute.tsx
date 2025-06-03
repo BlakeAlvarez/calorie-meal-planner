@@ -108,12 +108,6 @@ export default function CookDistribute() {
           return sum + (res?.kcal ?? 0);
         }, 0);
 
-        // sum of all raw weights for group
-        const rawTotal = group.ingredients.reduce((sum, ing) => {
-          const grams = Number(ing.grams);
-          return sum + (isFinite(grams) ? grams : 0);
-        }, 0);
-
         // compute per-person kcal and gram portions for this group
         const results = calculateAdjustedMealDistribution({
           people: people.map(p => ({

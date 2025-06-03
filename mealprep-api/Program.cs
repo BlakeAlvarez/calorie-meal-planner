@@ -1,12 +1,12 @@
-using MealPrepAPI.Data;
+using MealPrepApi.Data;
 using Microsoft.EntityFrameworkCore;
 using System.Threading.RateLimiting;
 
-DotNetEnv.Env.Load();
+DotNetEnv.Env.Load("/home/blake/projects/calorie-meal-planner/mealprep-api/.env");
 
 var builder = WebApplication.CreateBuilder(args);
 
-DotNetEnv.Env.Load();
+
 
 // load user secrets in dev
 if (builder.Environment.IsDevelopment())
@@ -14,7 +14,11 @@ if (builder.Environment.IsDevelopment())
     builder.Configuration.AddUserSecrets<Program>();
 }
 
-// === CORS policies ===
+Console.WriteLine("Loaded DB path: " + Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection"));
+
+
+
+// CORS policies
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>

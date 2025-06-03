@@ -1,4 +1,4 @@
-namespace MealPrepAPI.Models
+namespace MealPrepApi.Models
 {
     public class USDARequest
     {

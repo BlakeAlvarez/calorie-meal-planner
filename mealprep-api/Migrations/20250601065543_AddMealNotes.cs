@@ -2,7 +2,7 @@
 
 #nullable disable
 
-namespace MealPrepAPI.Migrations
+namespace MealPrepApi.Migrations
 {
     /// <inheritdoc />
     public partial class AddMealNotes : Migration

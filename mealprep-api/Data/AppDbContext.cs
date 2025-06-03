@@ -1,7 +1,7 @@
-﻿using MealPrepAPI.Models;
+﻿using MealPrepApi.Models;
 using Microsoft.EntityFrameworkCore;
 
-namespace MealPrepAPI.Data
+namespace MealPrepApi.Data
 {
     public class AppDbContext : DbContext
     {

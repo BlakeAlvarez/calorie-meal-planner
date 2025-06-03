@@ -21,8 +21,6 @@ const BuildMeal = () => {
 
   const { addGroup, groups } = useGroupStore();
   const people = usePeopleStore((s) => s.people);
-  const clearPeople = usePeopleStore((s) => s.clearPeople);
-
 
   // when user navigates away from build meal page, clear cached search items
   useEffect(() => {

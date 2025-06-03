@@ -13,6 +13,6 @@ export async function getMeal(id: number) {
 
 // gets all saved meals from backend (used for saved meals page list/search)
 export async function getAllMeals(): Promise<Meal[]> {
-  const res = await fetch(`${API_BASE}/api/meals`);
+  const res = await fetch(`${API_BASE}/meals`);
   return await res.json();
 }

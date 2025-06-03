@@ -1,8 +1,7 @@
 // calls api to search for foods in USDA database.
 // removed: suggestion dropdown upon search. costs api searches and not really useful but its there if needed
 
-import { useEffect, useRef, useState } from 'react';
-import axios from 'axios';
+import { useRef, useState } from 'react';
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FoodResultCard } from "@/components/FoodResultCard";

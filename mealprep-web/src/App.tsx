@@ -11,10 +11,13 @@ import MealsPage from "@/pages/SavedMeals";
 import MealSetup from "@/pages/MealSetup";
 import MealSummaryPage from "./pages/MealSummary";
 
+// --mode production for prod, --mode development for dev
+const basename = import.meta.env.VITE_ROUTER_BASE
+
 function App() {
     return (
         <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
-            <BrowserRouter>
+            <BrowserRouter basename={basename}>
                 <NavBar />
                 <Routes>
                 <Route path="/" element={<Menu />} />
