@@ -1,14 +1,13 @@
 {
-  "files": [],
-  "references": [
-    { "path": "./tsconfig.app.json" },
-    { "path": "./tsconfig.node.json" }
-  ],
+	"files": [],
+	"references": [
+		{"path": "./tsconfig.app.json"},
+		{"path": "./tsconfig.node.json"}
+	],
 
-  // added for tailwindcss https://ui.shadcn.com/docs/installation/vite
-  "compilerOptions": {
-    "baseUrl": ".",
-    "paths": {"@/*": ["./src/*"]},
-  }
-
+	// added for tailwindcss https://ui.shadcn.com/docs/installation/vite
+	"compilerOptions": {
+		"baseUrl": ".",
+		"paths": {"@/*": ["./src/*"]}
+	}
 }

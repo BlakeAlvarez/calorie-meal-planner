@@ -2,8 +2,6 @@
 using MealPrepApi.Data;
 using MealPrepApi.Models;
 using Microsoft.EntityFrameworkCore;
-using MealPrepApi.Data;
-using MealPrepApi.Models;
 
 namespace MealPrepApi.Controllers
 {

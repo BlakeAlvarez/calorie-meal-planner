@@ -2,11 +2,11 @@ using MealPrepApi.Data;
 using Microsoft.EntityFrameworkCore;
 using System.Threading.RateLimiting;
 
-DotNetEnv.Env.Load("/home/blake/projects/calorie-meal-planner/mealprep-api/.env");
+DotNetEnv.Env.Load();
 
 var builder = WebApplication.CreateBuilder(args);
 
-
+builder.Configuration.AddEnvironmentVariables();
 
 // load user secrets in dev
 if (builder.Environment.IsDevelopment())
