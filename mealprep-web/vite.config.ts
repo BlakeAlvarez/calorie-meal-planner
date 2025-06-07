@@ -17,7 +17,7 @@ export default defineConfig(({mode}) => {
 			__API_BASE__: JSON.stringify(env.VITE_API_BASE),
 		},
 		server: {
-			host: "0.0.0.0",
+			host: mode === "development" ? true : "0.0.0.0",
 			port: 5173,
 			allowedHosts:
 				mode === "production" ? ["mealprep-server.local"] : undefined,

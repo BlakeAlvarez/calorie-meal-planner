@@ -3,20 +3,31 @@ import {stepLabels} from "@/stores/stepStore";
 import clsx from "clsx";
 
 export const StepProgressBar = () => {
-	const {stepOrder, currentStep} = useStepNavigator();
+	const {stepOrder, currentStep, currentIndex, goToStep} = useStepNavigator();
 
 	return (
 		<div className="flex justify-between items-center border-b pb-4 mb-6">
 			{stepOrder.map((step, i) => {
 				const isActive = step === currentStep;
-				const isCompleted = stepOrder.indexOf(currentStep) > i;
+				const isCompleted = i < currentIndex;
+				const isClickable = i <= currentIndex;
+
+				const handleClick = () => {
+					if (isClickable) {
+						goToStep(step);
+					}
+				};
 
 				return (
 					<div
 						key={step}
-						className="flex-1 flex flex-col items-center relative"
+						className={clsx(
+							"flex-1 flex flex-col items-center relative",
+							{"cursor-pointer": isClickable},
+						)}
+						onClick={handleClick}
 					>
-						{/* circle for step */}
+						{/* Step circle */}
 						<div
 							className={clsx(
 								"w-8 h-8 rounded-full border-2 flex items-center justify-center text-sm font-medium z-10",
@@ -33,11 +44,18 @@ export const StepProgressBar = () => {
 							{i + 1}
 						</div>
 
-						{/* step labels */}
-						<span className="mt-1 text-xs text-center">
+						{/* Step label */}
+						<span
+							className={clsx("mt-1 text-xs text-center", {
+								"hover:underline": isClickable,
+								"text-muted-foreground":
+									!isActive && !isCompleted,
+							})}
+						>
 							{stepLabels[step] ?? step}
 						</span>
-						{/* connector */}
+
+						{/* Connector line */}
 						{i < stepOrder.length - 1 && (
 							<div className="absolute top-4 left-1/2 w-full h-0.5 bg-muted -z-0" />
 						)}

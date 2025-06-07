@@ -14,8 +14,19 @@ import {StepProgressBar} from "@/components/StepProgressBar";
 import {getEnergyKcal} from "@/utils/nutrientUtils";
 import {recalculatePlans} from "@/lib/recalculatePlan";
 import {syncGroupIngredientGramsFromPlans} from "@/lib/syncPlan";
-import {Link} from "react-router-dom";
+import {useNavigate} from "react-router-dom";
 import {formatKcal, formatGrams} from "@/utils/format";
+import {Printer} from "lucide-react";
+import {useDebouncedValue} from "@/hooks/useDebouncedValue";
+import {getResolvedPlans} from "@/lib/getResolvedPlans";
+import {
+	Collapsible,
+	CollapsibleTrigger,
+	CollapsibleContent,
+} from "@/components/ui/collapsible";
+import {ChevronDown} from "lucide-react";
+import {CalorieGauge} from "@/components/CalorieGauge";
+import {CalorieBreakdown} from "@/components/CalorieBreakdown";
 
 export default function Plan() {
 	const {nextStep, prevStep} = useStepNavigator();
@@ -24,30 +35,14 @@ export default function Plan() {
 	const groups = useGroupStore((s) => s.groups);
 	const plans = useIngredientPlanStore((s) => s.plans);
 	const setPlan = useIngredientPlanStore((s) => s.setPlan);
+	const [isOpen, setIsOpen] = useState(false);
+	const navigate = useNavigate();
 
 	// calculates the total calories in a meal plan by adding all calories for all meals in the plan
 	const totalCalories = people.reduce(
 		(sum, p) => sum + p.targetCalories * p.meals,
 		0,
 	);
-
-	// removes plans for any food that no longer exists in the meal MAY BE UNECESSARY GIVEN THE FLOW LIMITS NOW
-	useEffect(() => {
-		const currentFoodIds = new Set(foods.map((f) => f.fdcId));
-		const {plans, removePlan} = useIngredientPlanStore.getState();
-		plans.forEach((plan) => {
-			if (!currentFoodIds.has(plan.foodId)) {
-				removePlan(plan.foodId);
-			}
-		});
-	}, [foods]);
-
-	// calculates values based on the saved plans
-	useEffect(() => {
-		if (people.length > 0 && plans.length > 0) {
-			recalculatePlans({plans, people, foods, setPlan});
-		}
-	}, [people.length]);
 
 	// calculates the calories per 100 grams of a food item
 	const getKcalPer100g = (fdcId: number): number => {
@@ -65,7 +60,11 @@ export default function Plan() {
 		return Math.round((gramsPerUnit / 100) * kcalPer100g * 10) / 10;
 	};
 
-	const actualCalories = plans.reduce((sum, p) => sum + (p.kcal ?? 0), 0);
+	const resolvedPlans = getResolvedPlans(plans, foods, people);
+	const actualCalories = resolvedPlans.reduce(
+		(sum, p) => sum + (p.kcal ?? 0),
+		0,
+	);
 	const kcalRemaining = totalCalories - actualCalories;
 	const percentRemaining =
 		Math.round((kcalRemaining / totalCalories) * 1000) / 10;
@@ -112,7 +111,6 @@ export default function Plan() {
 		);
 		const inputRef = useRef<HTMLInputElement | null>(null);
 
-		// only initialize input once on mount
 		const [inputValue, setInputValue] = useState("");
 
 		useEffect(() => {
@@ -121,15 +119,16 @@ export default function Plan() {
 			}
 		}, [food.fdcId, existing?.value]);
 
-		const numericInput = parseFloat(inputValue) || 0;
+		const debouncedValue = useDebouncedValue(inputValue, 500);
+		const userTypedInput = parseFloat(inputValue) || 0;
 
 		const rawKcal = isUnitBased
-			? numericInput * kcalPerUnit
+			? userTypedInput * kcalPerUnit
 			: mode === "calories"
-				? numericInput
+				? userTypedInput
 				: mode === "grams"
-					? (numericInput / 100) * kcalPer100g
-					: (numericInput / 100) * totalCalories;
+					? (userTypedInput / 100) * kcalPer100g
+					: (userTypedInput / 100) * totalCalories;
 
 		const kcal = Math.round(rawKcal * 10) / 10;
 		const grams =
@@ -137,17 +136,61 @@ export default function Plan() {
 				? Math.round((rawKcal / kcalPer100g) * 1000) / 10
 				: 0;
 
+		// 💾 Save to store only after debounce
+		useEffect(() => {
+			if (debouncedValue === "") return;
+
+			const parsed = parseFloat(debouncedValue) || 0;
+			const rawKcal = isUnitBased
+				? parsed * kcalPerUnit
+				: mode === "calories"
+					? parsed
+					: mode === "grams"
+						? (parsed / 100) * kcalPer100g
+						: (parsed / 100) * totalCalories;
+
+			const kcal = Math.round(rawKcal * 10) / 10;
+			const grams =
+				!isUnitBased && kcalPer100g > 0
+					? Math.round((rawKcal / kcalPer100g) * 1000) / 10
+					: 0;
+
+			const percent =
+				mode === "percent"
+					? userTypedInput
+					: totalCalories > 0
+						? Math.round((kcal / totalCalories) * 1000) / 10
+						: 0;
+
+			if (!foodIdToGroupId.has(food.fdcId)) {
+				useMealStore.getState().updateFood(food.fdcId, {
+					rawWeightGrams: grams,
+					cookedWeightGrams:
+						useMealStore
+							.getState()
+							.foods.find((f) => f.fdcId === food.fdcId)
+							?.cookedWeightGrams ?? undefined,
+				});
+			}
+			setPlan(
+				food.fdcId,
+				isUnitBased ? "calories" : mode,
+				parsed,
+				grams,
+				kcal,
+				percent,
+			);
+		}, [debouncedValue, mode, kcalPer100g, totalCalories]);
+
 		const handleModeSwitch = (newMode: IngredientPlanMode) => {
 			const baseValue = parseFloat(inputValue) || 0;
-
-			// Recalculate kcal based ONLY on the current input and mode
 			const rawKcal = isUnitBased
 				? baseValue * kcalPerUnit
 				: mode === "calories"
 					? baseValue
 					: mode === "grams"
 						? (baseValue / 100) * kcalPer100g
-						: (baseValue / 100) * actualCalories;
+						: (baseValue / 100) * totalCalories;
 
 			const kcal = Math.round(rawKcal * 10) / 10;
 			const grams =
@@ -157,37 +200,23 @@ export default function Plan() {
 
 			const percent =
 				mode === "percent"
-					? baseValue // trust user input if they were already in percent mode
-					: Math.round((kcal / actualCalories) * 1000) / 10;
+					? baseValue
+					: Math.round((kcal / totalCalories) * 1000) / 10;
 
-			// Now determine the correct value for the new mode
 			let newValue = "";
-			if (newMode === "grams") {
-				newValue = grams.toFixed(1);
-			} else if (newMode === "calories") {
-				newValue = kcal.toFixed(1);
-			} else if (newMode === "percent") {
-				newValue = percent.toFixed(1);
-			}
+			if (newMode === "grams") newValue = grams.toFixed(1);
+			else if (newMode === "calories") newValue = kcal.toFixed(1);
+			else if (newMode === "percent") newValue = percent.toFixed(1);
 
 			setMode(newMode);
 			setInputValue(newValue);
-			setPlan(
-				food.fdcId,
-				newMode,
-				parseFloat(newValue),
-				grams,
-				kcal,
-				percent,
-			);
 			inputRef.current?.focus();
 		};
 
-		// the percent value to display
 		const displayPercent =
 			mode === "percent"
 				? Number(inputValue || "0").toFixed(1)
-				: (Math.round((kcal / actualCalories) * 1000) / 10).toFixed(1);
+				: (Math.round((kcal / totalCalories) * 1000) / 10).toFixed(1);
 
 		return (
 			<Card key={food.fdcId}>
@@ -208,34 +237,8 @@ export default function Plan() {
 							type="number"
 							className="w-28"
 							value={inputValue}
-							onChange={(e) => {
-								const val = e.target.value;
-								setInputValue(val);
-								const parsed = parseFloat(val) || 0;
-								const gramsVal = isUnitBased
-									? 0
-									: (parsed / 100) * kcalPer100g;
-								const kcalVal = isUnitBased
-									? parsed * kcalPerUnit
-									: (parsed / 100) * kcalPer100g;
-								const percentVal =
-									mode === "percent"
-										? parsed
-										: Math.round(
-												(kcalVal / actualCalories) *
-													1000,
-											) / 10;
-
-								setPlan(
-									food.fdcId,
-									isUnitBased ? "calories" : mode,
-									parsed,
-									gramsVal,
-									kcalVal,
-									percentVal,
-								);
-							}}
-							placeholder={isUnitBased ? `e.g. 2` : ""}
+							onChange={(e) => setInputValue(e.target.value)}
+							placeholder={isUnitBased ? "e.g. 2" : ""}
 						/>
 						{!isUnitBased && (
 							<>
@@ -272,7 +275,7 @@ export default function Plan() {
 						)}
 					</div>
 					<p className="text-s text-muted-foreground">
-						→
+						→{" "}
 						{isUnitBased
 							? `${formatKcal(kcal)} (${displayPercent}%)`
 							: `${formatGrams(grams)} (${(grams / 453.592).toFixed(2)} lb), ${kcal.toFixed(1)} kcal (${displayPercent}%)`}
@@ -282,46 +285,58 @@ export default function Plan() {
 		);
 	};
 
+	const handleSaveAndContinue = () => {
+		const {plans, setPlan} = useIngredientPlanStore.getState();
+		const foods = useMealStore.getState().foods;
+		const people = usePeopleStore.getState().people;
+
+		recalculatePlans({plans, setPlan, foods, people});
+
+		const updatedPlans = useIngredientPlanStore.getState().plans;
+		const groups = useGroupStore.getState().groups;
+
+		const syncedGroups = syncGroupIngredientGramsFromPlans(
+			groups,
+			updatedPlans,
+		);
+		useGroupStore.getState().setGroups(syncedGroups);
+
+		nextStep();
+	};
+
 	return (
-		<div className="space-y-6 p-6">
+		<div className="plan-step space-y-6 p-6">
 			{/* shows user progress bar for meal setup flow */}
 			<StepProgressBar />
 
 			{/* header and next/back navigation */}
-			<div className="flex items-center justify-between mb-4">
-				<Button variant="secondary" onClick={prevStep}>
-					Back
-				</Button>
-				<h1 className="text-2xl font-bold text-center flex-1">
+			<div className="space-y-3 mb-4">
+				{/* Top Row: Back and Print Buttons */}
+				<div className="flex justify-between items-center">
+					<Button variant="secondary" onClick={prevStep}>
+						Back
+					</Button>
+					<div className="flex justify-center">
+						<Button onClick={handleSaveAndContinue}>
+							Continue
+						</Button>
+					</div>
+				</div>
+
+				{/* Centered Title */}
+				<h1 className="text-xl md:text-2xl font-bold text-center">
 					Planning: Ingredients & Calories
 				</h1>
 
-				<Button asChild>
-					<Link to="/meal-summary">📄 Print Plan</Link>
-				</Button>
-
 				<Button
-					onClick={() => {
-						recalculatePlans({
-							plans: useIngredientPlanStore.getState().plans,
-							setPlan: useIngredientPlanStore.getState().setPlan,
-							foods: useMealStore.getState().foods,
-							people: usePeopleStore.getState().people,
-						});
-
-						const plans = useIngredientPlanStore.getState().plans;
-						const groups = useGroupStore.getState().groups;
-
-						const syncedGroups = syncGroupIngredientGramsFromPlans(
-							groups,
-							plans,
-						);
-						useGroupStore.getState().setGroups(syncedGroups);
-
-						nextStep();
-					}}
+					variant="ghost"
+					size="icon"
+					onClick={() =>
+						navigate("/meal-summary", {state: {fromCook: false}})
+					}
 				>
-					Save & Continue
+					<Printer className="w-5 h-5" />
+					<span className="sr-only">Print</span>
 				</Button>
 			</div>
 
@@ -329,6 +344,7 @@ export default function Plan() {
 			<p className="text-sm text-muted-foreground">
 				Total Target Calories: {formatKcal(totalCalories)}
 			</p>
+			<CalorieBreakdown />
 			<p className="text-sm text-muted-foreground">
 				Total Actual Calories: {formatKcal(actualCalories)}
 			</p>
@@ -340,7 +356,14 @@ export default function Plan() {
 				{kcalRemaining < 0 ? " over" : " remaining"}
 			</p>
 
-			{/* display each group's total raw weight */}
+			<div className="max-w-sm mx-auto">
+				<CalorieGauge
+					totalCalories={totalCalories}
+					actualCalories={actualCalories}
+				/>
+			</div>
+
+			{/* display each group's total initial weight */}
 			<div className="space-y-1">
 				{Object.entries(groupWeights).map(([id, grams]) => {
 					const group = groups.find((g) => g.id === id);
@@ -353,6 +376,30 @@ export default function Plan() {
 					);
 				})}
 			</div>
+
+			<Collapsible open={isOpen} onOpenChange={setIsOpen}>
+				<CollapsibleTrigger className="flex items-center text-sm font-semibold">
+					<ChevronDown
+						className={`mr-2 h-4 w-4 transition-transform duration-300 ${
+							isOpen ? "rotate-180" : ""
+						}`}
+					/>
+					Show Ungrouped Food Weights
+				</CollapsibleTrigger>
+				<CollapsibleContent className="space-y-1 mt-1">
+					{ungroupedFoods.map((food) => (
+						<p
+							key={food.fdcId}
+							className="text-sm text-muted-foreground"
+						>
+							{food.description} Weight:{" "}
+							{formatGrams(food.rawWeightGrams ?? 0)} (
+							{((food.rawWeightGrams ?? 0) / 453.592).toFixed(2)}{" "}
+							lb)
+						</p>
+					))}
+				</CollapsibleContent>
+			</Collapsible>
 
 			{people.length > 0 && actualCalories > 0 && (
 				<div className="space-y-2">

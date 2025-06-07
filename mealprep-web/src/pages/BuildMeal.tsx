@@ -5,9 +5,10 @@ import {Button} from "@/components/ui/button";
 import {
 	Dialog,
 	DialogContent,
+	DialogDescription,
 	DialogHeader,
 	DialogTitle,
-	DialogFooter,
+	DialogTrigger,
 } from "@/components/ui/dialog";
 import AddFood from "@/components/AddFood";
 import PeoplePanel from "@/components/PeoplePanel";
@@ -18,7 +19,8 @@ import {useStepNavigator} from "@/hooks/useStepNavigator";
 import {StepProgressBar} from "@/components/StepProgressBar";
 import {HelpButton} from "@/components/HelpButton";
 import {useFoodSearchCacheStore} from "@/stores/foodSearchCacheStore";
-
+import {ClearMealButton} from "@/components/ClearMealButton";
+import {useMealStore} from "@/stores/mealStore";
 const BuildMeal = () => {
 	const {nextStep, prevStep} = useStepNavigator();
 	const [addFoodOpen, setAddFoodOpen] = useState(false);
@@ -27,6 +29,7 @@ const BuildMeal = () => {
 
 	const {addGroup, groups} = useGroupStore();
 	const people = usePeopleStore((s) => s.people);
+	const foods = useMealStore((s) => s.foods);
 
 	// when user navigates away from build meal page, clear cached search items
 	useEffect(() => {
@@ -51,18 +54,30 @@ const BuildMeal = () => {
 		prevStep();
 	};
 
+	useEffect(() => {
+		console.log("Meal page mounted");
+	}, []);
+
 	return (
 		<div className="p-6 space-y-4">
 			{/* shows user progress bar for meal setup flow */}
 			<StepProgressBar />
 
-			{/* header, help menu, and next/back navigation */}
-			<div className="flex items-center justify-between mb-4">
-				<Button variant="secondary" onClick={handleBack}>
-					Back
-				</Button>
-				<div className="flex items-center gap-2">
-					<h1 className="text-2xl font-bold">Your Meal</h1>
+			{/* Top Section: Back + Save & Continue aligned */}
+			<div className="space-y-3 mb-4">
+				{/* Row: Back and Save & Continue */}
+				<div className="flex justify-between items-center">
+					<Button variant="secondary" onClick={handleBack}>
+						Back
+					</Button>
+					<Button onClick={nextStep}>Continue</Button>
+				</div>
+
+				{/* Centered Title + Help */}
+				<div className="flex flex-col items-center gap-1">
+					<h1 className="text-2xl font-bold text-center">
+						Your Meal
+					</h1>
 					<HelpButton
 						title="Building Your Meal"
 						content={
@@ -71,24 +86,18 @@ const BuildMeal = () => {
 									This page lets you build your meal by adding
 									food items and organizing them into groups.
 								</p>
-								<p>You can:</p>
 								<ul className="list-disc list-inside ml-4">
 									<li>
-										Click <strong>Add Food</strong> to add
-										ingredients from the USDA or custom
-										entries
+										Click <strong>Add Food</strong> to
+										search or enter foods
 									</li>
 									<li>
 										Use <strong>+ Add Group</strong> to
-										create cooked ingredient groups (e.g.
-										Stir Fry, Rice Batch)
+										organize into cooked batches
 									</li>
+									<li>Drag foods to assign them to groups</li>
 									<li>
-										Assign foods to groups using
-										drag-and-drop
-									</li>
-									<li>
-										Edit people with calorie targets using{" "}
+										Edit calorie targets with{" "}
 										<strong>Edit People</strong>
 									</li>
 								</ul>
@@ -96,7 +105,6 @@ const BuildMeal = () => {
 						}
 					/>
 				</div>
-				<Button onClick={nextStep}>Save & Continue</Button>
 			</div>
 
 			{/* modal to add food from USDA or custom input */}
@@ -126,7 +134,7 @@ const BuildMeal = () => {
 						You’ve already entered people. Going back will clear
 						this setup. Are you sure?
 					</p>
-					<DialogFooter className="pt-4">
+					<div className="pt-4 flex justify-end space-x-2">
 						<Button
 							variant="ghost"
 							onClick={() => setConfirmDialogOpen(false)}
@@ -139,18 +147,40 @@ const BuildMeal = () => {
 						>
 							Yes, Go Back
 						</Button>
-					</DialogFooter>
+					</div>
 				</DialogContent>
 			</Dialog>
 
-			{/* action buttons to add people, add food items, or add groups to the meal plan */}
-			<div>
+			<div className="flex items-start gap-2 bg-muted rounded-md p-3 text-sm text-muted-foreground border">
+				<div>
+					<strong>What’s a Dish?</strong>
+					<br />A <strong>dish</strong> is a collection of ingredients
+					you cook or prep together — like chicken and rice, pasta
+					with sauce, or a veggie bowl. Grouping ingredients helps you
+					portion and plan accurately.
+				</div>
+			</div>
+
+			<div className="flex flex-wrap gap-2 mt-2">
 				<Button onClick={() => setPeopleOpen(true)}>Edit People</Button>
-				<Button onClick={() => setAddFoodOpen(true)}>+ Add Food</Button>
+				<Button onClick={() => setAddFoodOpen(true)}>
+					Add Ingredient
+				</Button>
 				<Button onClick={() => addGroup(`Group ${groups.length + 1}`)}>
-					+ Add Group
+					Add Dish
 				</Button>
 			</div>
+
+			{foods.length > 0 && (
+				<details className="mt-4">
+					<summary className="cursor-pointer text-sm font-medium underline text-muted-foreground">
+						More Actions
+					</summary>
+					<div className="flex flex-wrap gap-2 mt-2">
+						<ClearMealButton />
+					</div>
+				</details>
+			)}
 
 			{/* main layout for assigning food items to groups */}
 			<MealDragAssign />

@@ -25,3 +25,4 @@ mealprep-api/publish/
 # scripts
 *push-db.sh
 *pull-db.sh
+/*.zip
