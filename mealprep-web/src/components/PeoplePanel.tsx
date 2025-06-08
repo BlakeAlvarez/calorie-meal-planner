@@ -41,8 +41,8 @@ export default function PeoplePanel() {
 		addPerson({
 			id: Date.now().toString(),
 			name: name.trim(),
-			targetCalories: cal,
-			meals: numMeals,
+			caloriesPerMeal: cal,
+			totalMeals: numMeals,
 		});
 
 		setName("");
@@ -80,10 +80,10 @@ export default function PeoplePanel() {
 									<Input
 										type="number"
 										className="w-20"
-										value={person.meals}
+										value={person.totalMeals}
 										onChange={(e) =>
 											updatePerson(person.id, {
-												meals:
+												totalMeals:
 													parseInt(e.target.value) ||
 													1,
 											})
@@ -105,7 +105,7 @@ export default function PeoplePanel() {
 										{person.name}
 									</p>
 									<p className="text-sm text-muted-foreground">
-										{person.meals} meals
+										{person.totalMeals} meals
 									</p>
 									<Button
 										size="icon"
@@ -123,7 +123,7 @@ export default function PeoplePanel() {
 							<Input
 								type="number"
 								className="w-24"
-								value={person.targetCalories}
+								value={person.caloriesPerMeal}
 								onChange={(e) =>
 									updateCalories(
 										person.id,

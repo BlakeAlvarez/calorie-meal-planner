@@ -5,10 +5,8 @@ import {Button} from "@/components/ui/button";
 import {
 	Dialog,
 	DialogContent,
-	DialogDescription,
 	DialogHeader,
 	DialogTitle,
-	DialogTrigger,
 } from "@/components/ui/dialog";
 import AddFood from "@/components/AddFood";
 import PeoplePanel from "@/components/PeoplePanel";
@@ -21,6 +19,7 @@ import {HelpButton} from "@/components/HelpButton";
 import {useFoodSearchCacheStore} from "@/stores/foodSearchCacheStore";
 import {ClearMealButton} from "@/components/ClearMealButton";
 import {useMealStore} from "@/stores/mealStore";
+
 const BuildMeal = () => {
 	const {nextStep, prevStep} = useStepNavigator();
 	const [addFoodOpen, setAddFoodOpen] = useState(false);
@@ -38,7 +37,7 @@ const BuildMeal = () => {
 		};
 	}, []);
 
-	// when user presses Back
+	// when user presses back
 	const handleBack = () => {
 		if (people.length > 0) {
 			setConfirmDialogOpen(true); // prompt confirmation if people already set
@@ -63,9 +62,8 @@ const BuildMeal = () => {
 			{/* shows user progress bar for meal setup flow */}
 			<StepProgressBar />
 
-			{/* Top Section: Back + Save & Continue aligned */}
+			{/* top section: back + continue aligned */}
 			<div className="space-y-3 mb-4">
-				{/* Row: Back and Save & Continue */}
 				<div className="flex justify-between items-center">
 					<Button variant="secondary" onClick={handleBack}>
 						Back
@@ -73,7 +71,7 @@ const BuildMeal = () => {
 					<Button onClick={nextStep}>Continue</Button>
 				</div>
 
-				{/* Centered Title + Help */}
+				{/* center title and help */}
 				<div className="flex flex-col items-center gap-1">
 					<h1 className="text-2xl font-bold text-center">
 						Your Meal

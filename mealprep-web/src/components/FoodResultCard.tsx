@@ -9,7 +9,8 @@ import {
 } from "@/components/ui/card";
 import {toast} from "sonner";
 
-import type {Food, Nutrient} from "@/types/food";
+import type {Food} from "@/types/food";
+import type {Nutrition} from "@/types/nutrition";
 import {useMealStore} from "@/stores/mealStore";
 import {getEnergyKcal} from "@/utils/nutrientUtils";
 
@@ -20,20 +21,13 @@ export function FoodResultCard({
 	multiAdd,
 	onClose,
 }: {
-	food: Food;
-	multiAdd: boolean;
-	onClose: () => void;
+	readonly food: Food;
+	readonly multiAdd: boolean;
+	readonly onClose: () => void;
 }) {
 	// helper function to grab value of specific nutrient by name or number
-	function getNutrientValue(
-		nutrients: Nutrient[],
-		key: string | number,
-	): number {
-		const match = nutrients.find((n) =>
-			typeof key === "string"
-				? n.nutrientName === key
-				: n.nutrientNumber === key.toString(),
-		);
+	function getNutrientValue(nutrients: Nutrition[], key: string): number {
+		const match = nutrients.find((n) => n.name === key);
 		return match?.value && match.value > 0 ? match.value : 0;
 	}
 

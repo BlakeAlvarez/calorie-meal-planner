@@ -1,98 +1,100 @@
-// this hook is used for all calculations regarding calorie counts
+// this file is used for all calculations regarding calorie counts, allocations, and meal distribution
 
-import {usePersonGroupStore} from "@/stores/personGroupStore";
-import {useGroupStore} from "@/stores/groupStore";
-import {useMealStore} from "@/stores/mealStore";
-import {useMemo} from "react";
+import type {Group} from "@/types/group";
+import type {Food} from "@/types/food";
+import type {Person} from "@/types/person";
 
-// this hook returns the total raw calorie allocation for a given person
-// calculation: for each group, (raw grams allocated / 100) * avg kcal/100g of group
-export function useSelectPersonRawCalories(personId: string): number {
-	const allocations = usePersonGroupStore((s) => s.allocations);
-	const groups = useGroupStore((s) => s.groups);
-	const foods = useMealStore((s) => s.foods);
+// given a group and all foods, calculates average kcal per 100g for the group's foods (ignores unit-based foods)
+export function getGroupAvgKcalPer100g(group: Group, foods: Food[]): number {
+	function isUnitBased(food: Food): boolean {
+		if (!food.servingSizes) return false;
+		// if any serving unit is not grams or ml, it's unit-based
+		return food.servingSizes.some((s) => s.unit !== "g" && s.unit !== "ml");
+	}
 
-	return useMemo(() => {
-		const personAlloc = allocations[personId] ?? {};
-		let total = 0;
-
-		// loop through each group this person has grams allocated to
-		for (const [groupId, rawGrams] of Object.entries(personAlloc)) {
-			const group = groups.find((g) => g.id === groupId);
-			if (!group) continue;
-
-			// find all foods in this group based on ingredients foodId's
-			const groupFoods = foods.filter(
-				(food) =>
-					group.ingredients.some(
-						(ing) => ing.foodId === food.fdcId,
-					) && !food.unitLabel, // skip unit-based items when computing avg kcal/100g
-			);
-
-			if (groupFoods.length === 0) continue;
-
-			// calculate average calories per 100g across the group
-			const sumCal = groupFoods.reduce((sum, food) => {
-				const nutrient = food.foodNutrients.find(
-					(n) => n.nutrientName === "Energy",
-				);
-				return sum + (nutrient?.value ?? 0);
-			}, 0);
-			const avgCalPer100g = sumCal / groupFoods.length;
-
-			// multiply raw grams by avg kcal/100g to get this group's calories for this person
-			total += (rawGrams / 100) * avgCalPer100g;
-		}
-
-		return total;
-	}, [allocations, groups, foods, personId]);
+	const groupFoods = foods.filter(
+		(food) =>
+			group.ingredients.some((ing) => ing.foodId === food.id) &&
+			!isUnitBased(food),
+	);
+	if (groupFoods.length === 0) return 0;
+	const sumCal = groupFoods.reduce((sum, food) => {
+		const nutrient = food.foodNutrients.find(
+			(n) =>
+				n.name.toLowerCase() === "energy" &&
+				n.unit.toLowerCase() === "kcal",
+		);
+		return sum + (nutrient?.value ?? 0);
+	}, 0);
+	return sumCal / groupFoods.length;
 }
 
-// this function calculates how many calories each person gets based on the actual calories total instead of planned calories
-// I opted to proportionally remove/add calories to each person based on their share to keep things as even as possible
+// calculates the total raw calorie allocation for a given person based on their group allocations (if using grams-based planning)
+export function getPersonRawCalories({
+	personId,
+	groups,
+	foods,
+	personGroupAllocations, // { [personId]: { [groupId]: grams } }
+}: {
+	personId: string;
+	groups: Group[];
+	foods: Food[];
+	personGroupAllocations: Record<string, Record<string, number>>;
+}): number {
+	const personAlloc = personGroupAllocations[personId] ?? {};
+	let total = 0;
+
+	// loop through each group this person has grams allocated to
+	for (const [groupId, rawGrams] of Object.entries(personAlloc)) {
+		const group = groups.find((g) => g.id === groupId);
+		if (!group) continue;
+		const avgKcalPer100g = getGroupAvgKcalPer100g(group, foods);
+		total += (rawGrams / 100) * avgKcalPer100g;
+	}
+
+	return total;
+}
+
+// calculates how many calories each person gets based on the actual calories total instead of planned calories
+// each person's share is proportional to their planned total
+export interface PersonGroupAllocation {
+	id: string;
+	name: string;
+	totalMeals: number;
+	plannedGroupKcal: number;
+}
+
 export function calculateAdjustedMealDistribution({
 	people,
 	totalAvailableKcal,
 	totalCookedGrams,
 }: {
-	people: {
-		id: string;
-		name: string;
-		meals: number;
-		targetCaloriesPerMeal: number;
-	}[];
+	people: PersonGroupAllocation[];
 	totalAvailableKcal: number;
 	totalCookedGrams: number;
 }) {
-	// total calories originally requested across all people
-	const totalRequestedKcal = people.reduce(
-		(sum, p) => sum + p.targetCaloriesPerMeal * p.meals,
+	const sumGroupKcal = people.reduce(
+		(sum, p) => sum + (p.plannedGroupKcal ?? 0),
 		0,
 	);
-
-	// figure out kcal per gram based on cooked group weight
-	const kcalPerGram = totalAvailableKcal / totalCookedGrams;
-
-	// return each person's adjusted kcal and gram values based on their share
-	return people.map((p) => {
-		const plannedTotalKcal = p.targetCaloriesPerMeal * p.meals;
-		const share = plannedTotalKcal / totalRequestedKcal;
-
-		// scale calories basedon on each persons share of the total calories they planned
-		const adjustedTotalKcal = share * totalAvailableKcal;
-		const adjustedKcalPerMeal = adjustedTotalKcal / p.meals;
-
-		// convert adjusted calories into gram weight
-		const adjustedGramsTotal = adjustedTotalKcal / kcalPerGram;
-		const adjustedGramsPerMeal = adjustedGramsTotal / p.meals;
-
+	return people.map((person) => {
+		const share =
+			sumGroupKcal > 0
+				? (person.plannedGroupKcal ?? 0) / sumGroupKcal
+				: 1 / people.length;
+		const adjustedGramsTotal = share * totalCookedGrams;
+		const adjustedKcalTotal = share * totalAvailableKcal;
+		const adjustedGramsPerMeal =
+			adjustedGramsTotal / (person.totalMeals ?? 1);
+		const adjustedKcalPerMeal =
+			adjustedKcalTotal / (person.totalMeals ?? 1);
 		return {
-			personId: p.id,
-			name: p.name,
-			adjustedTotalKcal,
-			adjustedKcalPerMeal,
+			personId: person.id,
+			name: person.name,
 			adjustedGramsTotal,
+			adjustedKcalTotal,
 			adjustedGramsPerMeal,
+			adjustedKcalPerMeal,
 		};
 	});
 }

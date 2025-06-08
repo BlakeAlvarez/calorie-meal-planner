@@ -21,9 +21,9 @@ export function SaveMealModal({
 	onClose,
 	onSave,
 }: {
-	open: boolean;
-	onClose: () => void;
-	onSave: (name: string, createdBy: string, notes: string) => void;
+	readonly open: boolean;
+	readonly onClose: () => void;
+	readonly onSave: (name: string, createdBy: string, notes: string) => void;
 }) {
 	const [name, setName] = useState("");
 	const [createdBy, setCreatedBy] = useState("");

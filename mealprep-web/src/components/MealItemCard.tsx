@@ -1,6 +1,6 @@
 // individual card for a food item in the meal
 // draggable via @dnd-kit and editable for name and kcal/gram info
-// syncs with ingredientPlanStore and mealStore when updated
+// syncs with mealStore when updated
 // can be removed from a group or meal entirely
 
 import React, {useState} from "react";
@@ -17,10 +17,15 @@ import {Button} from "@/components/ui/button";
 import {Pencil, Save, X} from "lucide-react";
 import {useMealStore} from "@/stores/mealStore";
 import {useGroupStore} from "@/stores/groupStore";
-import {usePeopleStore} from "@/stores/peopleStore";
 import type {Food} from "@/types/food";
-import {useIngredientPlanStore} from "@/stores/ingredientPlanStore";
 import {getEnergyKcal} from "@/utils/nutrientUtils";
+
+function isUnitBased(food: Food): boolean {
+	return (
+		food.servingSizes?.some((s) => s.unit !== "g" && s.unit !== "ml") ??
+		false
+	);
+}
 
 export function MealItemCard({food, groupId}: {food: Food; groupId?: string}) {
 	const [isEditing, setIsEditing] = useState(false);
@@ -28,7 +33,6 @@ export function MealItemCard({food, groupId}: {food: Food; groupId?: string}) {
 	const [editedCalories, setEditedCalories] = useState<number>(() =>
 		getEnergyKcal(food.foodNutrients),
 	);
-
 	const [editedGrams, setEditedGrams] = useState<number>(100);
 
 	const updateFood = useMealStore((s) => s.updateFood);
@@ -36,13 +40,10 @@ export function MealItemCard({food, groupId}: {food: Food; groupId?: string}) {
 	const removeIngredientFromGroup = useGroupStore(
 		(s) => s.removeIngredientFromGroup,
 	);
-	const removePlan = useIngredientPlanStore((s) => s.removePlan);
-	const setPlan = useIngredientPlanStore((s) => s.setPlan);
-	const plans = useIngredientPlanStore((s) => s.plans);
 
 	const {attributes, listeners, setNodeRef, transform, isDragging} =
 		useDraggable({
-			id: food.fdcId.toString(),
+			id: food.id,
 		});
 
 	const style: React.CSSProperties = {
@@ -54,50 +55,31 @@ export function MealItemCard({food, groupId}: {food: Food; groupId?: string}) {
 		position: "relative",
 	};
 
-	const isUnitBased = food.isUnitBased;
+	const unitBased = isUnitBased(food);
 
-	const kcalPer100g = !isUnitBased
+	// for display only, calculate kcal per 100g if not unit-based
+	const kcalPer100g = !unitBased
 		? Math.round((editedCalories / editedGrams) * 1000) / 10
 		: null;
 
-	// update food in mealStore and recalculate plan value if it exists
+	// update food in mealStore
 	const handleSave = () => {
-		const nutrient: any = {
-			nutrientName: "Energy",
-			nutrientNumber: "999",
-			unitName: "kcal",
-			nutrientId: 999,
-			value: isUnitBased ? editedCalories : (kcalPer100g ?? 0),
-		};
-
-		updateFood(food.fdcId, {
+		updateFood(food.id, {
 			description: editedName,
-			foodNutrients: [nutrient],
+			foodNutrients: [
+				...food.foodNutrients.filter(
+					(n) =>
+						n?.name &&
+						n.name.toLowerCase() !== "energy" &&
+						!n.name.toLowerCase().includes("calorie"),
+				),
+				{
+					name: "Energy",
+					value: editedCalories,
+					unit: "kcal",
+				},
+			],
 		});
-
-		const existing = plans.find((p) => p.foodId === food.fdcId);
-		if (existing) {
-			const grams = !isUnitBased ? editedGrams : 0;
-			const kcal = isUnitBased
-				? editedCalories
-				: Math.round((editedGrams / 100) * (kcalPer100g ?? 0) * 10) /
-					10;
-			const percent = usePeopleStore
-				.getState()
-				.people.reduce((sum, p) => sum + p.meals * p.targetCalories, 0);
-
-			const percentValue = percent > 0 ? (kcal / percent) * 100 : 0;
-
-			setPlan(
-				food.fdcId,
-				existing.mode,
-				existing.value,
-				grams,
-				kcal,
-				percentValue,
-			);
-		}
-
 		setIsEditing(false);
 	};
 
@@ -114,7 +96,7 @@ export function MealItemCard({food, groupId}: {food: Food; groupId?: string}) {
 				<button
 					onClick={(e) => {
 						e.stopPropagation();
-						removeIngredientFromGroup(groupId, food.fdcId);
+						removeIngredientFromGroup(groupId, food.id);
 					}}
 					onTouchStart={(e) => e.stopPropagation()}
 					className="absolute top-2 right-2 z-10 p-1 rounded-full bg-red-100 hover:bg-red-200"
@@ -151,9 +133,9 @@ export function MealItemCard({food, groupId}: {food: Food; groupId?: string}) {
 							}
 							placeholder="kcal"
 						/>
-						{isUnitBased ? (
+						{unitBased ? (
 							<span className="text-sm text-muted-foreground">
-								/ {food.unitLabel}
+								/ {food.servingSizes?.[0]?.unit || "unit"}
 							</span>
 						) : (
 							<>
@@ -178,17 +160,23 @@ export function MealItemCard({food, groupId}: {food: Food; groupId?: string}) {
 				) : (
 					<div className="text-sm text-muted-foreground space-y-1">
 						<p>
-							{isUnitBased
-								? `${editedCalories} kcal / ${food.unitLabel}`
+							{unitBased
+								? `${editedCalories} kcal / ${food.servingSizes?.[0]?.unit || "unit"}`
 								: `${kcalPer100g?.toFixed(1)} kcal / 100g`}
 						</p>
-
 						{/* optional nutrient breakdown */}
 						{(() => {
+							if (!food || !Array.isArray(food.foodNutrients))
+								return null;
+
 							const get = (name: string) =>
 								food.foodNutrients.find(
-									(n) => n.nutrientName === name,
+									(n) =>
+										n?.name &&
+										n.name.toLowerCase() ===
+											name.toLowerCase(),
 								)?.value ?? 0;
+
 							const protein = get("Protein");
 							const fat = get("Total lipid (fat)");
 							const carbs = get("Carbohydrate, by difference");
@@ -205,7 +193,7 @@ export function MealItemCard({food, groupId}: {food: Food; groupId?: string}) {
 				)}
 			</CardContent>
 
-			{/* completely removes food from meal and associated plan and all groups */}
+			{/* completely removes food from meal and associated groups */}
 			<CardFooter className="flex justify-between items-center">
 				<Button
 					variant="destructive"
@@ -215,15 +203,12 @@ export function MealItemCard({food, groupId}: {food: Food; groupId?: string}) {
 							useGroupStore.getState();
 						const groups = useGroupStore.getState().groups;
 						const group = groups.find((g) =>
-							g.ingredients.some((i) => i.foodId === food.fdcId),
+							g.ingredients.some((i) => i.foodId === food.id),
 						);
-
 						if (group) {
-							removeIngredientFromGroup(group.id, food.fdcId);
+							removeIngredientFromGroup(group.id, food.id);
 						}
-
-						removeFood(food.fdcId);
-						removePlan(food.fdcId);
+						removeFood(food.id);
 					}}
 				>
 					Remove

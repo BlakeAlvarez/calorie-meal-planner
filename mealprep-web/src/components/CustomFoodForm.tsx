@@ -83,42 +83,54 @@ export function CustomFoodForm({
 		}
 
 		const food: Food = {
-			fdcId: Date.now(),
+			id: Date.now().toString(), // unique id as string for now using date
 			description: name.trim(),
-			dataType: "Custom",
 			foodNutrients: [
 				{
-					nutrientName: "Energy",
-					nutrientNumber: "-1",
-					unitName: "kcal",
+					name: "Energy",
 					value: Math.round(kcalPer100g * 10) / 10,
-					nutrientId: -1,
+					unit: "kcal",
 				},
 				{
-					nutrientName: "Protein",
-					nutrientNumber: "-101",
-					unitName: "g",
+					name: "Protein",
 					value: parseFloat(protein) || 0,
-					nutrientId: -101,
+					unit: "g",
 				},
 				{
-					nutrientName: "Total lipid (fat)",
-					nutrientNumber: "-102",
-					unitName: "g",
+					name: "Total lipid (fat)",
 					value: parseFloat(fat) || 0,
-					nutrientId: -102,
+					unit: "g",
 				},
 				{
-					nutrientName: "Carbohydrate, by difference",
-					nutrientNumber: "-103",
-					unitName: "g",
+					name: "Carbohydrate, by difference",
 					value: parseFloat(carbs) || 0,
-					nutrientId: -103,
+					unit: "g",
 				},
 			],
-			unitLabel: isUnitBased ? unitLabel.trim() || "Unit" : undefined,
-			gramsPerUnit: isUnitBased ? gramsPerUnitValue : undefined,
-			isUnitBased,
+			// optional: Serving sizes
+			servingSizes:
+				mode === "perUnit"
+					? [
+							{
+								unit: unitLabel.trim() || "unit",
+								gramsPerUnit: gramsPerUnitValue,
+								kcalPerUnit: parseFloat(unitKcal) || 0,
+								proteinPerUnit: parseFloat(protein) || 0,
+								fatPerUnit: parseFloat(fat) || 0,
+								carbsPerUnit: parseFloat(carbs) || 0,
+							},
+						]
+					: [
+							{
+								unit: "g",
+								gramsPerUnit: 1,
+								kcalPerUnit: kcalPer100g / 100,
+								proteinPerUnit:
+									(parseFloat(protein) || 0) / 100,
+								fatPerUnit: (parseFloat(fat) || 0) / 100,
+								carbsPerUnit: (parseFloat(carbs) || 0) / 100,
+							},
+						],
 		};
 
 		addFood(food);

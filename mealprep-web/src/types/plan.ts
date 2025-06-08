@@ -2,7 +2,7 @@
 
 export type IngredientPlanMode = "grams" | "calories" | "percent";
 
-// For useIngredientInputState only — raw input data, temporary
+// for useIngredientInputState only — raw input data, temporary
 export interface IngredientInputPlan {
 	foodId: number;
 	personId?: string;

@@ -2,7 +2,7 @@ import {useState} from "react";
 import {usePeopleStore} from "@/stores/peopleStore";
 import {useGroupStore} from "@/stores/groupStore";
 import {useMealStore} from "@/stores/mealStore";
-import {useIngredientPlanStore} from "@/stores/ingredientPlanStore";
+import {usePersonGroupPlanStore} from "@/stores/personGroupPlanStore";
 import {calculateAdjustedMealDistribution} from "@/lib/calculations";
 import {getEnergyKcal} from "@/utils/nutrientUtils";
 import {Input} from "@/components/ui/input";
@@ -20,72 +20,72 @@ import {
 } from "@/components/ui/table";
 import {useNavigate} from "react-router-dom";
 import {toast} from "sonner";
-import type {IngredientGroup} from "@/stores/groupStore";
+import type {Group} from "@/types/group";
+import type {Food} from "@/types/food";
+
+function isUnitBased(food: Food): boolean {
+	// ff any serving size is not grams or ml, we consider it unit-based
+	return (
+		food.servingSizes?.some((s) => s.unit !== "g" && s.unit !== "ml") ??
+		false
+	);
+}
+
+// sum raw weights for a group by adding each ingredient's grams
+function getRawWeight(group: Group): number {
+	return group.ingredients.reduce((sum, ing) => {
+		if (ing.unit === "g") return sum + ing.amount;
+		return sum;
+	}, 0);
+}
 
 export default function CookDistribute() {
-	// sum raw weights for a group by adding each ingredient's grams
-	function getRawWeight(group: IngredientGroup): number {
-		return group.ingredients.reduce((sum, ing) => sum + ing.grams, 0);
-	}
-
 	const {prevStep} = useStepNavigator();
 	const groups = useGroupStore((s) => s.groups);
 	const setCookedWeight = useGroupStore((s) => s.setCookedWeight);
-	const plans = useIngredientPlanStore((s) => s.plans);
 	const foods = useMealStore((s) => s.foods);
 	const people = usePeopleStore((s) => s.people);
+	const plans = usePersonGroupPlanStore((s) => s.plans); // <-- get the plans
 	const navigate = useNavigate();
+	const [ungroupedCookedWeights, setUngroupedCookedWeights] = useState<
+		Record<string, number>
+	>({});
 
-	// calculates the total meal calories based on all food plan entries
-	const TOTAL_TARGET_CALORIES = plans.reduce(
-		(sum, plan) => sum + (plan.kcal ?? 0),
-		0,
-	);
-
-	// helpers to get kcal per 100g or per unit from USDA data
-	const getKcalPer100g = (fdcId: number): number => {
-		const food = foods.find((f) => f.fdcId === fdcId);
+	// helper to get kcal per 100g from food nutrients
+	const getKcalPer100g = (id: string): number => {
+		const food = foods.find((f) => f.id === id);
 		return food ? getEnergyKcal(food.foodNutrients) : 0;
 	};
 
-	const getKcalPerUnit = (fdcId: number): number => {
-		const food = foods.find((f) => f.fdcId === fdcId);
-		if (!food || !food.isUnitBased) return 0;
+	// helper to get kcal per unit if applicable
+	const getKcalPerUnit = (id: string): number => {
+		const food = foods.find((f) => f.id === id);
+		if (!food || !isUnitBased(food)) return 0;
+		const unitServing = food.servingSizes?.find(
+			(s) => s.unit !== "g" && s.unit !== "ml",
+		);
+		const gramsPerUnit = unitServing?.gramsPerUnit ?? 100;
 		const kcalPer100g = getEnergyKcal(food.foodNutrients);
-		const gramsPerUnit = food.gramsPerUnit ?? 100;
 		return Math.round((gramsPerUnit / 100) * kcalPer100g * 10) / 10;
 	};
-
-	// sync plans into groups just-in-time
-	const resolvedGroups = groups.map((group) => ({
-		...group,
-		ingredients: group.ingredients.map((ing) => {
-			const plan = plans.find((p) => p.foodId === ing.foodId);
-			return {
-				...ing,
-				grams: plan?.grams ?? 0,
-				kcal: plan?.kcal ?? 0,
-				percent: plan?.percent ?? 0,
-				mode: plan?.mode ?? "grams",
-				value: plan?.value ?? 0,
-			};
-		}),
-	}));
 
 	// determine ungrouped foods (not assigned to any group)
 	const groupedFoodIds = groups.flatMap((g) =>
 		g.ingredients.map((i) => i.foodId),
 	);
-	const ungroupedFoods = foods.filter(
-		(f) => !groupedFoodIds.includes(f.fdcId),
-	);
-	const [ungroupedCookedWeights, setUngroupedCookedWeights] = useState<
-		Record<number, number>
-	>({});
+	const ungroupedFoods = foods.filter((f) => !groupedFoodIds.includes(f.id));
 
 	const handleFinish = () => {
 		toast.success("Meal finalized!");
 		navigate("/meal-summary", {state: {fromCook: true}});
+	};
+
+	// helper for percent from plans store (plan mode must be "percent")
+	const getPercent = (personId: string, groupId: string) => {
+		const plan = plans.find(
+			(p) => p.personId === personId && p.groupId === groupId,
+		);
+		return plan?.mode === "percent" ? (plan.value ?? 0) : 0;
 	};
 
 	return (
@@ -94,40 +94,50 @@ export default function CookDistribute() {
 			<StepProgressBar />
 
 			<div className="space-y-3 mb-4">
-				{/* Row: Back + Final Action */}
 				<div className="flex justify-between items-center">
 					<Button variant="secondary" onClick={prevStep}>
 						Back
 					</Button>
 					<Button onClick={handleFinish}>Meal Summary</Button>
 				</div>
-
-				{/* Centered Title */}
 				<h1 className="text-xl md:text-2xl font-bold text-center">
 					Cook & Distribute
 				</h1>
 			</div>
 
 			{/* group handling */}
-			{resolvedGroups.map((group) => {
+			{groups.map((group) => {
 				if (!group.ingredients.length) return null;
 				const cookedGrams = group.cookedWeightGrams ?? 0;
 
-				// total kcal in group from resolved plans
-				const groupKcal = group.ingredients.reduce(
-					(sum, ing) => sum + (ing.kcal ?? 0),
-					0,
-				);
+				// total kcal in group
+				const groupKcal = group.ingredients.reduce((sum, ing) => {
+					const food = foods.find((f) => f.id === ing.foodId);
+					const kcalPer100g = getEnergyKcal(
+						food?.foodNutrients ?? [],
+					);
+					const kcal =
+						ing.unit === "g"
+							? Math.round((ing.amount * kcalPer100g) / 100)
+							: 0;
+					return sum + kcal;
+				}, 0);
 				if (groupKcal === 0) return null;
 
-				// compute per-person kcal and gram portions for this group
+				// calculate plannedGroupKcal for each person (per group)
+				const peopleForDist = people.map((p) => ({
+					id: p.id,
+					name: p.name,
+					totalMeals: p.totalMeals ?? 1,
+					plannedGroupKcal:
+						p.caloriesPerMeal *
+						p.totalMeals *
+						(getPercent(p.id, group.id) / 100),
+				}));
+
+				// actual per-person meal distribution for this group
 				const results = calculateAdjustedMealDistribution({
-					people: people.map((p) => ({
-						id: p.id,
-						name: p.name,
-						meals: p.meals,
-						targetCaloriesPerMeal: p.targetCalories,
-					})),
+					people: peopleForDist,
 					totalAvailableKcal: groupKcal,
 					totalCookedGrams: cookedGrams,
 				});
@@ -136,7 +146,7 @@ export default function CookDistribute() {
 					<div className="flex justify-center" key={group.id}>
 						<div className="w-full max-w-2xl border p-4 rounded space-y-2">
 							<h2 className="font-semibold text-lg">
-								{group.name} (Group {group.displayId})
+								{group.name}
 							</h2>
 							<p className="text-sm text-muted-foreground">
 								Total Calories: {groupKcal.toFixed(1)} kcal
@@ -162,8 +172,6 @@ export default function CookDistribute() {
 									}
 								/>
 							</div>
-
-							{/* table of kcal/grams per person */}
 							{cookedGrams > 0 && (
 								<Table className="mt-2">
 									<TableHeader>
@@ -197,7 +205,9 @@ export default function CookDistribute() {
 															1,
 														)}{" "}
 														g / meal ×{" "}
-														{person?.meals} meals
+														{person?.totalMeals ??
+															1}{" "}
+														meals
 													</TableCell>
 													<TableCell className="text-right text-muted-foreground">
 														{res.adjustedKcalPerMeal.toFixed(
@@ -228,54 +238,47 @@ export default function CookDistribute() {
 					<h2 className="text-lg font-semibold text-center">
 						Ungrouped Foods
 					</h2>
-
 					{ungroupedFoods.map((food) => {
-						const plan = plans.find((p) => p.foodId === food.fdcId);
-						if (!plan) return null;
+						const kcalPer100g = getKcalPer100g(food.id);
+						const kcalPerUnit = getKcalPerUnit(food.id);
+						const isUnit = isUnitBased(food);
 
-						const kcalPer100g = getKcalPer100g(food.fdcId);
-						const kcalPerUnit = getKcalPerUnit(food.fdcId);
-						const isUnit = !!food.unitLabel;
-
-						const rawKcal =
-							plan.kcal ??
-							(isUnit
-								? plan.value * kcalPerUnit
-								: plan.mode === "calories"
-									? plan.value
-									: plan.mode === "grams"
-										? (plan.value / 100) * kcalPer100g
-										: (plan.value / 100) *
-											TOTAL_TARGET_CALORIES);
-
-						const kcal = Math.round(rawKcal * 10) / 10;
-						const cookedGrams = food.cookedWeightGrams ?? 0;
-						const rawGrams = food.rawWeightGrams ?? 0;
+						const grams =
+							food.servingSizes?.find((s) => s.unit === "g")
+								?.gramsPerUnit ??
+							food.servingSizes?.[0]?.gramsPerUnit ??
+							100;
+						const kcal = isUnit
+							? kcalPerUnit
+							: Math.round((grams * kcalPer100g) / 100);
+						const cookedGrams =
+							ungroupedCookedWeights[food.id] ??
+							food.cookedWeightGrams ??
+							0;
+						const rawGrams = food.rawWeightGrams ?? grams;
 
 						if (kcal === 0) return null;
 
+						// for ungrouped, distribute by total calories
 						const adjusted = calculateAdjustedMealDistribution({
 							people: people.map((p) => ({
 								id: p.id,
 								name: p.name,
-								meals: p.meals,
-								targetCaloriesPerMeal: p.targetCalories,
+								totalMeals: p.totalMeals ?? 1,
+								plannedGroupKcal:
+									p.caloriesPerMeal * p.totalMeals, // entire calories, as no group percent
 							})),
 							totalAvailableKcal: kcal,
 							totalCookedGrams: cookedGrams,
 						});
 
 						return (
-							<div
-								className="flex justify-center"
-								key={food.fdcId}
-							>
+							<div className="flex justify-center" key={food.id}>
 								<div className="w-full max-w-2xl border p-4 rounded space-y-2">
 									<h3 className="font-semibold text-base">
 										{food.description}
 									</h3>
-
-									{!food.unitLabel && (
+									{!isUnit && (
 										<p className="text-sm text-muted-foreground">
 											Initial Weight:{" "}
 											{rawGrams.toFixed(1)} g (
@@ -284,18 +287,16 @@ export default function CookDistribute() {
 										</p>
 									)}
 									<div className="flex items-center gap-4">
-										<Label
-											htmlFor={`ungrouped-${food.fdcId}`}
-										>
+										<Label htmlFor={`ungrouped-${food.id}`}>
 											Cooked Weight (g)
 										</Label>
 										<Input
-											id={`ungrouped-${food.fdcId}`}
+											id={`ungrouped-${food.id}`}
 											type="number"
 											className="w-32"
 											value={
 												ungroupedCookedWeights[
-													food.fdcId
+													food.id
 												] ??
 												food.cookedWeightGrams ??
 												""
@@ -308,27 +309,24 @@ export default function CookDistribute() {
 												setUngroupedCookedWeights(
 													(prev) => ({
 														...prev,
-														[food.fdcId]: value,
+														[food.id]: value,
 													}),
 												);
 												useMealStore
 													.getState()
-													.updateFood(food.fdcId, {
+													.updateFood(food.id, {
 														cookedWeightGrams:
 															value,
 													});
 											}}
 										/>
 									</div>
-
-									{/* table for ungrouped food distribution */}
 									{cookedGrams > 0 && (
 										<>
 											<p className="text-sm text-muted-foreground">
 												Total Calories:{" "}
 												{kcal.toFixed(1)} kcal
 											</p>
-
 											<Table className="mt-2">
 												<TableHeader>
 													<TableRow>
@@ -368,9 +366,8 @@ export default function CookDistribute() {
 																		1,
 																	)}{" "}
 																	g / meal ×{" "}
-																	{
-																		person?.meals
-																	}{" "}
+																	{person?.totalMeals ??
+																		1}{" "}
 																	meals
 																</TableCell>
 																<TableCell className="text-right text-muted-foreground">

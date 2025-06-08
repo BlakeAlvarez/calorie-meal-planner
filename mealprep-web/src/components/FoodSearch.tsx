@@ -16,6 +16,7 @@ import {
 	PaginationNext,
 	PaginationLink,
 } from "@/components/ui/pagination";
+import {mapUsdaFood} from "@/utils/mapAPI";
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 
@@ -25,8 +26,8 @@ export function FoodSearch({
 	multiAdd,
 	onClose,
 }: {
-	multiAdd: boolean;
-	onClose: () => void;
+	readonly multiAdd: boolean;
+	readonly onClose: () => void;
 }) {
 	const [query, setQuery] = useState("");
 	const [results, setResults] = useState<Food[]>([]);
@@ -67,6 +68,7 @@ export function FoodSearch({
 			setTotalPages(Math.ceil((cached.totalHits ?? 0) / 12));
 			setCurrentPage(page);
 			setLoading(false);
+			console.log(cached.foods[0]);
 			return;
 		}
 
@@ -84,10 +86,12 @@ export function FoodSearch({
 
 			const data = await res.json();
 
-			setResults(data.foods ?? []);
+			const foodsForApp = (data.foods ?? []).map(mapUsdaFood);
+			console.log(data);
+			setResults(foodsForApp);
 			setTotalPages(Math.ceil((data.totalHits ?? 0) / 12));
 			setCurrentPage(page);
-			setCache(cacheKey, data);
+			setCache(cacheKey, {foods: foodsForApp, totalHits: data.totalHits});
 		} catch (err) {
 			console.error("Error fetching:", err);
 			setError("Failed to fetch results.");
@@ -154,7 +158,6 @@ export function FoodSearch({
 					</Button>
 				</form>
 
-				{/* feedback */}
 				{loading && (
 					<div className="flex items-center gap-2 text-muted-foreground mt-4">
 						<Loader2 className="w-4 h-4 animate-spin" />
@@ -214,7 +217,7 @@ export function FoodSearch({
 						<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mt-4 justify-items-center">
 							{results.map((food) => (
 								<FoodResultCard
-									key={food.fdcId ?? food.description}
+									key={food.description}
 									food={food}
 									multiAdd={multiAdd}
 									onClose={onClose}

@@ -14,9 +14,9 @@ export function NavBar() {
 
 	return (
 		<nav className="sticky top-0 z-50 flex items-center justify-between border-b bg-background px-4 py-3">
-			{/* Left (Logo + Mobile Menu) */}
+			{/* left (logo / mobile menu) */}
 			<div className="flex items-center gap-2">
-				{/* Hamburger (mobile only) */}
+				{/* hamburger (mobile only) */}
 				<Sheet>
 					<SheetTrigger asChild>
 						<Button
@@ -48,13 +48,13 @@ export function NavBar() {
 					</SheetContent>
 				</Sheet>
 
-				{/* Logo (always shown) */}
+				{/* logo (always shown) */}
 				<NavLink to="/" className="text-xl font-bold hover:underline">
 					🍽️ Calorie Prep
 				</NavLink>
 			</div>
 
-			{/* Center (Desktop Nav Only) */}
+			{/* center (desktop only) */}
 			<div className="hidden md:flex space-x-4">
 				<NavLink
 					to="/"
@@ -82,7 +82,7 @@ export function NavBar() {
 				</NavLink>
 			</div>
 
-			{/* Right (always visible) */}
+			{/* right (always visible) */}
 			<div className="flex items-center space-x-3">
 				<ModeToggle />
 			</div>

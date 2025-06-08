@@ -14,11 +14,9 @@ import {useStepStore} from "@/stores/stepStore";
 import {useMealStore} from "@/stores/mealStore";
 import {useGroupStore} from "@/stores/groupStore";
 import {usePeopleStore} from "@/stores/peopleStore";
-import {useIngredientPlanStore} from "@/stores/ingredientPlanStore";
+import {usePersonGroupPlanStore} from "@/stores/personGroupPlanStore";
 import {getMeal} from "@/lib/useMealApi";
-import {usePersonGroupStore} from "@/stores/personGroupStore";
-import {usePersonGroupCaloriesStore} from "@/stores/personGroupCaloriesStore";
-import {syncGroupIngredientGramsFromPlans} from "@/lib/syncPlan";
+import type {PersonGroupPlan} from "@/types/personGroupPlan";
 
 type TourContextType = {
 	startTour: () => void;
@@ -58,23 +56,23 @@ export const TourProvider = ({children}: {children: React.ReactNode}) => {
 	const {goToStep} = useStepNavigator();
 	const navigate = useNavigate();
 
-	// Backup of user state before tour
+	// backup of user state before tour
 	const backupRef = useRef<null | {
 		people: ReturnType<typeof usePeopleStore.getState>["people"];
 		foods: ReturnType<typeof useMealStore.getState>["foods"];
 		groups: ReturnType<typeof useGroupStore.getState>["groups"];
-		plans: ReturnType<typeof useIngredientPlanStore.getState>["plans"];
+		plans: ReturnType<typeof usePersonGroupPlanStore.getState>["plans"];
 	}>(null);
 
+	// clears all relevant stores for a fresh tour/demo
 	const clearMealData = () => {
 		usePeopleStore.getState().clearPeople();
 		useMealStore.getState().clearMeal();
 		useGroupStore.getState().clearGroups();
-		useIngredientPlanStore.getState().clearPlans();
-		usePersonGroupStore.getState().clearAllocations();
-		usePersonGroupCaloriesStore.getState().clearAllocations();
+		usePersonGroupPlanStore.getState().clearAllocations();
 	};
 
+	// handles tour step events and completion
 	const handleCallback = (data: CallBackProps) => {
 		if (["finished", "skipped"].includes(data.status!)) {
 			setRun(false);
@@ -85,12 +83,16 @@ export const TourProvider = ({children}: {children: React.ReactNode}) => {
 				usePeopleStore.getState().setPeople(backupRef.current.people);
 				useMealStore.getState().setFoods(backupRef.current.foods);
 				useGroupStore.getState().setGroups(backupRef.current.groups);
-				useIngredientPlanStore
-					.getState()
-					.loadPlans(backupRef.current.plans);
+				if (usePersonGroupPlanStore.getState().setPlans) {
+					usePersonGroupPlanStore
+						.getState()
+						.setPlans(backupRef.current.plans);
+				} else {
+					// fallback to clearing allocations if batch set is missing
+					usePersonGroupPlanStore.getState().clearAllocations();
+				}
 				backupRef.current = null;
 			} else {
-				console.log("🧼 No user data backed up. Clearing stores.");
 				clearMealData();
 			}
 
@@ -101,7 +103,6 @@ export const TourProvider = ({children}: {children: React.ReactNode}) => {
 		if (data.type === "step:after" && data.action === "next") {
 			const nextIndex = (data.index ?? stepIndex) + 1;
 			if (nextIndex >= steps.length) {
-				console.log("✅ Tour complete. Returning to home.");
 				setRun(false);
 				setStepIndex(0);
 				if (backupRef.current) {
@@ -112,9 +113,13 @@ export const TourProvider = ({children}: {children: React.ReactNode}) => {
 					useGroupStore
 						.getState()
 						.setGroups(backupRef.current.groups);
-					useIngredientPlanStore
-						.getState()
-						.loadPlans(backupRef.current.plans);
+					if (usePersonGroupPlanStore.getState().setPlans) {
+						usePersonGroupPlanStore
+							.getState()
+							.setPlans(backupRef.current.plans);
+					} else {
+						usePersonGroupPlanStore.getState().clearAllocations();
+					}
 					backupRef.current = null;
 				} else {
 					clearMealData();
@@ -147,17 +152,14 @@ export const TourProvider = ({children}: {children: React.ReactNode}) => {
 			}
 			return;
 		}
-
-		if (data.type === "step:before") {
-			console.log("🔁 Starting step:", data.index);
-		}
 	};
 
+	// starts app tour and loads the demo meal data
 	const startTour = useCallback(async () => {
 		const mealStore = useMealStore.getState();
 		const groupStore = useGroupStore.getState();
 		const peopleStore = usePeopleStore.getState();
-		const planStore = useIngredientPlanStore.getState();
+		const planStore = usePersonGroupPlanStore.getState();
 
 		const hasData =
 			mealStore.foods.length > 0 ||
@@ -172,53 +174,60 @@ export const TourProvider = ({children}: {children: React.ReactNode}) => {
 				groups: [...groupStore.groups],
 				plans: [...planStore.plans],
 			};
-			console.log("📦 Backed up user data before tour.");
 		}
 
 		try {
 			const tourMeal = await getMeal(20);
-			console.log("📥 Loaded tour meal:", tourMeal);
 
 			peopleStore.setPeople([
 				{
 					id: "a622d358-093e-4fc7-92ef-e3c01cd54b1a",
 					name: "Joz",
-					meals: 6,
-					targetCalories: 350,
+					totalMeals: 6,
+					caloriesPerMeal: 350,
 				},
 				{
 					id: "5ef0a973-a6ea-4c41-85e5-1d5e1c36640b",
 					name: "Blake",
-					meals: 6,
-					targetCalories: 450,
+					totalMeals: 6,
+					caloriesPerMeal: 450,
 				},
 			]);
 
 			const parsedFoods = JSON.parse(tourMeal.foodsJson || "[]");
-			// Parse and apply ingredient plans from group data
 			const parsedGroups = JSON.parse(tourMeal.groupsJson || "[]");
 
-			const extractedPlans = parsedGroups.flatMap((group: any) =>
-				group.ingredients.map((ing: any) => ({
-					foodId: ing.foodId,
-					mode: ing.mode,
-					value: ing.value,
-					grams: ing.grams,
-					kcal: ing.kcal,
-					percent: ing.percent,
-				})),
-			);
+			// if demo meal includes person-group plans, use them; otherwise, create empty.
+			const extractedPlans: PersonGroupPlan[] =
+				tourMeal.personGroupPlansJson
+					? JSON.parse(tourMeal.personGroupPlansJson)
+					: [];
 
-			planStore.loadPlans(extractedPlans);
+			// if batch setter exists, use it; otherwise fallback to setAllocation loop.
+			if (usePersonGroupPlanStore.getState().setPlans) {
+				usePersonGroupPlanStore.getState().setPlans(extractedPlans);
+			} else {
+				usePersonGroupPlanStore.getState().clearAllocations();
+				extractedPlans.forEach((plan) => {
+					usePersonGroupPlanStore
+						.getState()
+						.setAllocation(
+							plan.personId,
+							plan.groupId,
+							plan.mode,
+							plan.value,
+						);
+				});
+			}
 
 			mealStore.setFoods(parsedFoods);
 			groupStore.setGroups(parsedGroups);
 		} catch (err) {
-			console.error("❌ Failed to load tour meal:", err);
+			console.error("Failed to load tour meal:", err);
 			return;
 		}
 
-		// Wait briefly to ensure Plan page re-renders after loading stores
+		// wait briefly to ensure Plan page re-renders after loading stores
 		await new Promise((resolve) => setTimeout(resolve, 50));
 
 		const firstStep = steps[0];

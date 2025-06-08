@@ -1,32 +1,46 @@
-import type {Nutrient} from "@/types/food";
+import type {Nutrition} from "@/types/nutrition";
 
-// gets best available kcal value from USDA nutrient list
-export function getEnergyKcal(nutrients: Nutrient[]): number {
+// gets best available kcal value from a nutrition list
+export function getEnergyKcal(nutrients: Nutrition[]): number {
 	if (!nutrients || !Array.isArray(nutrients)) return 0;
-
-	const energy = nutrients.find(
+	// find "Energy" nutrient whose unit is "kcal" (case-insensitive)
+	const kcalNutrient = nutrients.find(
 		(n) =>
-			n.nutrientNumber === "208" || // standard kcal
-			n.nutrientNumber === "999" || // fallback/custom kcal
-			n.nutrientName.toLowerCase().includes("atwater general") ||
-			(n.nutrientName.toLowerCase().includes("energy") &&
-				n.unitName === "kcal"),
+			n.name?.toLowerCase() === "energy" &&
+			n.unit?.toLowerCase() === "kcal",
 	);
-
-	return energy?.value ?? 0;
+	return kcalNutrient?.value ?? 0;
 }
 
-// gets protein value in grams from USDA nutrient list
-export function getProtein(nutrients: Nutrient[]): number {
-	return nutrients.find((n) => n.nutrientName === "Protein")?.value ?? 0;
+// gets protein value in grams from a nutrition list
+export function getProtein(nutrients: Nutrition[]): number {
+	return (
+		nutrients.find(
+			(n) =>
+				n.name.toLowerCase() === "protein" ||
+				n.name.toLowerCase().includes("protein"),
+		)?.value ?? 0
+	);
 }
 
-// gets fat value in grams from USDA nutrient list
-export function getFats(nutrients: Nutrient[]): number {
-	return nutrients.find((n) => n.nutrientName === "Fats")?.value ?? 0;
+// gets fat value in grams from a nutrition list
+export function getFats(nutrients: Nutrition[]): number {
+	return (
+		nutrients.find(
+			(n) =>
+				n.name.toLowerCase() === "total lipid (fat)" ||
+				n.name.toLowerCase().includes("fat"),
+		)?.value ?? 0
+	);
 }
 
-// gets carbohydrate value in grams from USDA nutrient list
-export function getCarbs(nutrients: Nutrient[]): number {
-	return nutrients.find((n) => n.nutrientName === "Carbs")?.value ?? 0;
+// gets carbohydrate value in grams from a nutrition list
+export function getCarbs(nutrients: Nutrition[]): number {
+	return (
+		nutrients.find(
+			(n) =>
+				n.name.toLowerCase() === "carbohydrate, by difference" ||
+				n.name.toLowerCase().includes("carb"),
+		)?.value ?? 0
+	);
 }

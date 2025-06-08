@@ -16,10 +16,16 @@ import {useMealStore} from "@/stores/mealStore";
 import {useGroupStore} from "@/stores/groupStore";
 import {MealItemCard} from "@/components/MealItemCard";
 import {IngredientGroup} from "@/components/IngredientGroup";
+import {
+	getEnergyKcal,
+	getCarbs,
+	getFats,
+	getProtein,
+} from "@/utils/nutrientUtils";
 
 export function MealDragAssign() {
 	const {foods} = useMealStore();
-	const {groups, addFoodToGroup} = useGroupStore();
+	const {groups, addIngredientToGroup} = useGroupStore();
 
 	const sensors = useSensors(
 		useSensor(MouseSensor, {
@@ -35,18 +41,32 @@ export function MealDragAssign() {
 	);
 
 	const ungroupedFoods = foods.filter(
-		(food) => !groupedFoodIds.includes(food.fdcId),
+		(food) => !groupedFoodIds.includes(food.id),
 	);
 
 	const handleDragEnd = (event: DragEndEvent) => {
 		const {active, over} = event;
-
 		if (!over) return;
 
-		const foodId = parseInt(String(active.id));
+		const foodId = String(active.id);
 		const groupId = String(over.id);
 
-		addFoodToGroup(groupId, foodId);
+		// Find the food by ID
+		const food = foods.find((f) => f.id === foodId);
+		if (!food) return;
+
+		// Construct the GroupIngredient for this drag/drop (unit/amount defaults for now)
+		const newIngredient = {
+			foodId: food.id,
+			amount: 100, // default, or use last used
+			unit: "g", // default
+			kcal: getEnergyKcal(food.foodNutrients),
+			protein: getProtein(food.foodNutrients),
+			fat: getFats(food.foodNutrients),
+			carbs: getCarbs(food.foodNutrients),
+		};
+
+		addIngredientToGroup(groupId, newIngredient);
 	};
 
 	return (
@@ -63,7 +83,7 @@ export function MealDragAssign() {
 					</h2>
 					<div className="flex flex-wrap gap-4">
 						{ungroupedFoods.map((food) => (
-							<MealItemCard key={food.fdcId} food={food} />
+							<MealItemCard key={food.id} food={food} />
 						))}
 					</div>
 				</div>

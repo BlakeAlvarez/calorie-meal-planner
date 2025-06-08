@@ -5,7 +5,7 @@
 import React, {useState} from "react";
 import {useDroppable} from "@dnd-kit/core";
 import {useMealStore} from "@/stores/mealStore";
-import type {IngredientGroup as IngredientGroupType} from "@/stores/groupStore";
+import type {Group} from "@/types/group";
 import {useGroupStore} from "@/stores/groupStore";
 import {MealItemCard} from "./MealItemCard";
 import {Pencil, Save, X} from "lucide-react";
@@ -13,7 +13,7 @@ import {Input} from "@/components/ui/input";
 import {Button} from "@/components/ui/button";
 
 interface IngredientGroupProps {
-	group: IngredientGroupType;
+	group: Group;
 }
 
 export const IngredientGroup: React.FC<IngredientGroupProps> = ({group}) => {
@@ -26,7 +26,7 @@ export const IngredientGroup: React.FC<IngredientGroupProps> = ({group}) => {
 
 	// get only the foods currently assigned to this group
 	const groupFoods = foods.filter((food) =>
-		group.ingredients.some((ing) => ing.foodId === food.fdcId),
+		group.ingredients.some((ing) => ing.foodId === food.id),
 	);
 
 	const renameGroup = useGroupStore((s) => s.renameGroup);
@@ -78,7 +78,7 @@ export const IngredientGroup: React.FC<IngredientGroupProps> = ({group}) => {
 				) : (
 					<>
 						<span className="font-medium text-sm">
-							Group {group.displayId}: {group.name}
+							{group.name}
 						</span>
 						<Button
 							size="icon"
@@ -94,7 +94,7 @@ export const IngredientGroup: React.FC<IngredientGroupProps> = ({group}) => {
 			{/* show all foods in this group */}
 			<div className="flex flex-wrap gap-2">
 				{groupFoods.map((food) => (
-					<MealItemCard key={food.fdcId} food={food} />
+					<MealItemCard key={food.id} food={food} />
 				))}
 			</div>
 		</div>

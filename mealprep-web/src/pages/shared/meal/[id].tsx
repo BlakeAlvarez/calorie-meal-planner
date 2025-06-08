@@ -1,6 +1,3 @@
-// page used to load a saved meal. displays that the user is viewing a saved meal
-// then transfers saved meal ingredients to BuildMeal page
-
 import {useParams} from "react-router-dom";
 import {useEffect, useState} from "react";
 import {useMealStore} from "@/stores/mealStore";
@@ -9,7 +6,8 @@ import {getMeal} from "@/lib/useMealApi";
 import {Button} from "@/components/ui/button";
 import {usePeopleStore} from "@/stores/peopleStore";
 import {useStepNavigator} from "@/hooks/useStepNavigator";
-import {useIngredientPlanStore} from "@/stores/ingredientPlanStore";
+import {usePersonGroupPlanStore} from "@/stores/personGroupPlanStore";
+import type {PersonGroupPlan} from "@/types/personGroupPlan";
 
 export default function SharedMealPage() {
 	const {id} = useParams(); // get meal id from URL
@@ -27,27 +25,36 @@ export default function SharedMealPage() {
 				const data = await getMeal(Number(id));
 				const foods = JSON.parse(data.foodsJson);
 				const groups = JSON.parse(data.groupsJson);
+				const people = data.peopleJson
+					? JSON.parse(data.peopleJson)
+					: [];
+				const personGroupPlans: PersonGroupPlan[] =
+					data.personGroupPlansJson
+						? JSON.parse(data.personGroupPlansJson)
+						: [];
 
 				useMealStore.getState().setFoods(foods); // load foods
 				useGroupStore.getState().setGroups(groups); // load groups
+				usePeopleStore.getState().setPeople(people); // load people
 				setMealName(data.name); // set meal name
 
-				// Clear existing plans
-				const {clearPlans, setPlan} = useIngredientPlanStore.getState();
-				clearPlans();
-
-				// Load plans from each group ingredient
-				for (const group of groups) {
-					for (const ing of group.ingredients) {
-						setPlan(
-							ing.foodId,
-							ing.mode,
-							ing.value,
-							ing.grams,
-							ing.kcal,
-							ing.percent,
-						);
-					}
+				// Clear and load person-group plans
+				const {setPlans, clearAllocations} =
+					usePersonGroupPlanStore.getState();
+				if (setPlans) {
+					setPlans(personGroupPlans);
+				} else {
+					clearAllocations();
+					personGroupPlans.forEach((plan) => {
+						usePersonGroupPlanStore
+							.getState()
+							.setAllocation(
+								plan.personId,
+								plan.groupId,
+								plan.mode,
+								plan.value,
+							);
+					});
 				}
 			} catch (err) {
 				console.error("Error loading meal:", err);

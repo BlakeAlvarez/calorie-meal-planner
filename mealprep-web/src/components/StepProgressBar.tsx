@@ -27,7 +27,7 @@ export const StepProgressBar = () => {
 						)}
 						onClick={handleClick}
 					>
-						{/* Step circle */}
+						{/* step circle */}
 						<div
 							className={clsx(
 								"w-8 h-8 rounded-full border-2 flex items-center justify-center text-sm font-medium z-10",
@@ -44,7 +44,7 @@ export const StepProgressBar = () => {
 							{i + 1}
 						</div>
 
-						{/* Step label */}
+						{/* step label */}
 						<span
 							className={clsx("mt-1 text-xs text-center", {
 								"hover:underline": isClickable,
@@ -55,7 +55,7 @@ export const StepProgressBar = () => {
 							{stepLabels[step] ?? step}
 						</span>
 
-						{/* Connector line */}
+						{/* connector line */}
 						{i < stepOrder.length - 1 && (
 							<div className="absolute top-4 left-1/2 w-full h-0.5 bg-muted -z-0" />
 						)}
